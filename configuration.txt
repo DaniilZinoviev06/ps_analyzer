@@ -1,2 +1,3 @@
 exclude_ps_process=yes
 update_time=5
+is_logged=yes

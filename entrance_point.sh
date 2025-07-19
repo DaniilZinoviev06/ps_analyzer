@@ -3,15 +3,92 @@
 PROC_PATH="/proc"
 PROCESSES_LOG="$(pwd)/logs/processes.txt"
 STAT_LOG="$(pwd)/logs/stat_log.txt"
+settings="configuration.txt"
 
-#settings_func() {}
+settings_func() {
+    clear
+
+    option_1=$(grep "exclude_ps_process=" "$settings" | awk -F '=' '{print $2}')
+    option_2=$(grep "update_time=" "$settings" | awk -F '=' '{print $2}')
+    option_3=$(grep "is_logged=" "$settings" | awk -F '=' '{print $2}')
+
+    #echo "$option_1 $option_2 $option_3"
+
+    while true; do
+
+        echo -e "\n\e[97m-------------------------------------------------------\e[0m"
+        echo -e "\n\e[34m|\e[0m \e[92m1 - Исключить процесс ps aux\e[0m $(if [ "$option_1" == "yes" ]; then echo "вкл"; else echo "выкл"; fi)\n"
+        echo -e "\e[34m|\e[0m \e[92m2 - Задержка между итерациями\e[0m $option_2\n"
+        echo -e "\e[34m|\e[0m \e[92m3 - Логировать процессы с наибольшей загрузкой CPU\e[0m $(if [ "$option_3" == "yes" ]; then echo "вкл"; else echo "выкл"; fi)\n"
+        echo -e "\e[34m|\e[0m \e[92m4 - Назад\e[0m\n"
+        echo -e "\e[97m-------------------------------------------------------\e[0m\n"
+        read -p "Ввод: " choice
+
+        case $choice in
+            1)
+                clear
+                sed -i "s/^exclude_ps_process=.*/exclude_ps_process=$(if [ "$option_1" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$settings"
+                settings_func
+            ;;
+
+            2)
+                clear
+
+                read -p "Введите число: " choice_2
+                if test "$choice_2" -eq "$choice_2" 2>/dev/null; then
+                    sed -i "s/^update_time=.*/update_time=$choice_2/" "$settings"
+                    settings_func
+                else
+                    echo "$choice - не число"
+                    settings_func
+                fi
+            ;;
+
+            3)
+                clear
+                sed -i "s/^is_logged=.*/is_logged=$(if [ "$option_3" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$settings"
+                settings_func
+            ;;
+
+            4)
+                clear
+                break
+            ;;
+
+            *)
+                clear
+                echo -e "\n-------------------------"
+                echo "Повторите ввод"
+                echo "-------------------------"
+            ;;
+
+        esac
+
+    done
+}
 
 process_data() {
     echo -e "\e[34m-----------------------------------------\e[0m\n"
     echo -e "     \e[92mПодробная информация о процессе\e[0m\n"
     echo -e "\e[34m-----------------------------------------\e[0m\n"
 
-    cat "$PROC_PATH/$1/status"
+    echo -e "\n\e[92mОсновная информация\e[0m"
+    cat "$PROC_PATH/$1/status" | grep -E "Name|State|Threads"
+
+    echo -e "\n\e[92mВиртуальная память\e[0m"
+    echo "Общий размер, используемый процессом: $(cat "$PROC_PATH/$1/statm" | awk '{print $1}')"
+    echo "Размер физически-используемой памяти: $(cat "$PROC_PATH/$1/statm" | awk '{print $2}')"
+
+    echo -e "\n\e[92mСетевые интерфейсы процесса\e[0m"
+    cat "$PROC_PATH/$1/net/dev"
+
+    local p_name=$(grep "Name" "$PROC_PATH/$1/status" | awk '{print $2}')
+    # здесь доп информация journalctl, в /var/log/ особо ничего не нашел
+    echo -e "\n\e[92mПоследние логи с процессом\e[0m"
+    journalctl _PID=$1 | tail -n 5
+
+    echo -e "\n\e[92mПоследние логи с приложением\e[0m"
+    journalctl -xe | grep "$p_name" | tail -n 5
 
     echo -e "\n\e[34m-----------------------------------------\e[0m\n"
 }
@@ -19,17 +96,28 @@ process_data() {
 # фун-я с бесконечным циклом, можно было бы еще,
 # например, через рекурсию сделать
 ps_analyser() {
+
+    option_1=$(grep "exclude_ps_process=" "$settings" | awk -F '=' '{print $2}')
+    option_2=$(grep "update_time=" "$settings" | awk -F '=' '{print $2}')
+    option_3=$(grep "is_logged=" "$settings" | awk -F '=' '{print $2}')
+
     while true; do
 
         clear
 
         # извлекаю данные через утилиту cut, до этого использую tr с флагом -s,
         # чтобы избавиться от двойных пробелов, потому что до этого вывод был некорректным
-        ps aux | tr -s ' ' | cut -d ' ' -f 2,3 | tail -n +2 > $PROCESSES_LOG
+        ps aux | tr -s ' ' | cut -d ' ' -f 2,3,11 | tail -n +2 > $PROCESSES_LOG
 
-        sort -k2,2n "$PROCESSES_LOG" > tmp && mv tmp "$PROCESSES_LOG"
+        # не учитываем ps процесс, он часто показывает 100 cpu, по нему нет данных в /proc
+        # я решил его исключить, но это опционально
+        if [ "$option_1" == "yes" ]; then
+            sed -i '/ps/d' $PROCESSES_LOG
+        fi
 
-        read proccess_id cpu <<< $(tail -n 1 $PROCESSES_LOG)
+        sort -k2,2n "$PROCESSES_LOG" > process_file && mv process_file "$PROCESSES_LOG"
+
+        read proccess_id cpu process_name <<< $(tail -n 1 $PROCESSES_LOG)
 
         echo -e "\e[97mПроцесс (id): \e[0m\e[92m${proccess_id}\e[0m"
         echo -e "\e[97mЗагрузка CPU (%): \e[0m\e[92m${cpu}\e[0m\n"
@@ -59,7 +147,7 @@ main() {
 
             2)
                 clear
-                echo -e "2"
+                settings_func
             ;;
 
             3)
