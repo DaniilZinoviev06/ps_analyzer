@@ -6,6 +6,7 @@ STAT_LOG="$(pwd)/logs/stat_log.txt"
 settings="configuration.txt"
 PROCESSES_CPU_LOG="$(pwd)/logs/process_cpu_log.txt"
 
+# постарался использовать много разных утилит, не только awk или cut
 settings_func() {
     clear
 
@@ -68,6 +69,8 @@ settings_func() {
     done
 }
 
+# Выводить можно очень много информации, но я решил не выводить все
+# Иначе вывод будет выглядеть нечитаемо
 process_data() {
     echo -e "\e[34m-----------------------------------------\e[0m\n"
     echo -e "     \e[92mПодробная информация о процессе\e[0m\n"
@@ -82,6 +85,12 @@ process_data() {
 
     echo -e "\n\e[92mСетевые интерфейсы процесса\e[0m"
     cat "$PROC_PATH/$1/net/dev"
+
+    echo -e "\n\e[92mВвод-вывод (байт)\e[0m"
+    echo "Прочитано из ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "rchar" | sed 's/rchar: //')"
+    echo "Записано в ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "wchar" | sed 's/wchar: //')"
+    echo "Количество сисколов (чтение): $(cat "$PROC_PATH/$1/io" | grep "syscr" | sed 's/syscr: //')"
+    echo "Количество сисколов (запись): $(cat "$PROC_PATH/$1/io" | grep "syscw" | sed 's/syscw: //')"
 
     local p_name=$(grep "Name" "$PROC_PATH/$1/status" | awk '{print $2}')
     # здесь доп информация journalctl, в /var/log/ особо ничего не нашел
@@ -122,6 +131,7 @@ ps_analyser() {
 
         # логирование процессов в файл
         if [ "$option_3" == "yes" ]; then
+            # взял с SoF
             timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
             echo "$timestamp $proccess_id $process_name $cpu" >> $PROCESSES_CPU_LOG
         fi
@@ -131,7 +141,7 @@ ps_analyser() {
 
         process_data $proccess_id
 
-        sleep 5
+        sleep $option_2
 
     done
 }
