@@ -4,6 +4,7 @@ PROC_PATH="/proc"
 PROCESSES_LOG="$(pwd)/logs/processes.txt"
 STAT_LOG="$(pwd)/logs/stat_log.txt"
 settings="configuration.txt"
+PROCESSES_CPU_LOG="$(pwd)/logs/process_cpu_log.txt"
 
 settings_func() {
     clear
@@ -52,7 +53,7 @@ settings_func() {
 
             4)
                 clear
-                break
+                main
             ;;
 
             *)
@@ -118,6 +119,12 @@ ps_analyser() {
         sort -k2,2n "$PROCESSES_LOG" > process_file && mv process_file "$PROCESSES_LOG"
 
         read proccess_id cpu process_name <<< $(tail -n 1 $PROCESSES_LOG)
+
+        # логирование процессов в файл
+        if [ "$option_3" == "yes" ]; then
+            timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
+            echo "$timestamp $proccess_id $process_name $cpu" >> $PROCESSES_CPU_LOG
+        fi
 
         echo -e "\e[97mПроцесс (id): \e[0m\e[92m${proccess_id}\e[0m"
         echo -e "\e[97mЗагрузка CPU (%): \e[0m\e[92m${cpu}\e[0m\n"
