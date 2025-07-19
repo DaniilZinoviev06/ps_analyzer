@@ -3,16 +3,18 @@
 PROC_PATH="/proc"
 PROCESSES_LOG="$(pwd)/logs/processes.txt"
 STAT_LOG="$(pwd)/logs/stat_log.txt"
-settings="configuration.txt"
+SETTINGS="configuration.txt"
 PROCESSES_CPU_LOG="$(pwd)/logs/process_cpu_log.txt"
 
 # постарался использовать много разных утилит, не только awk или cut
+# можно было бы сделать еще проверки корректности выполнения команд, например, через $? и ветвление, если -eq не = 0
+
 settings_func() {
     clear
 
-    option_1=$(grep "exclude_ps_process=" "$settings" | awk -F '=' '{print $2}')
-    option_2=$(grep "update_time=" "$settings" | awk -F '=' '{print $2}')
-    option_3=$(grep "is_logged=" "$settings" | awk -F '=' '{print $2}')
+    option_1=$(grep "exclude_ps_process=" "$SETTINGS" | awk -F '=' '{print $2}')
+    option_2=$(grep "update_time=" "$SETTINGS" | awk -F '=' '{print $2}')
+    option_3=$(grep "is_logged=" "$SETTINGS" | awk -F '=' '{print $2}')
 
     #echo "$option_1 $option_2 $option_3"
 
@@ -29,7 +31,7 @@ settings_func() {
         case $choice in
             1)
                 clear
-                sed -i "s/^exclude_ps_process=.*/exclude_ps_process=$(if [ "$option_1" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$settings"
+                sed -i "s/^exclude_ps_process=.*/exclude_ps_process=$(if [ "$option_1" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$SETTINGS"
                 settings_func
             ;;
 
@@ -37,8 +39,10 @@ settings_func() {
                 clear
 
                 read -p "Введите число: " choice_2
+
+                # ошибки решил не выводить, в этом не вижу необходимости, просто сразу поток ошибок в null
                 if test "$choice_2" -eq "$choice_2" 2>/dev/null; then
-                    sed -i "s/^update_time=.*/update_time=$choice_2/" "$settings"
+                    sed -i "s/^update_time=.*/update_time=$choice_2/" "$SETTINGS"
                     settings_func
                 else
                     echo "$choice - не число"
@@ -48,7 +52,7 @@ settings_func() {
 
             3)
                 clear
-                sed -i "s/^is_logged=.*/is_logged=$(if [ "$option_3" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$settings"
+                sed -i "s/^is_logged=.*/is_logged=$(if [ "$option_3" == "yes" ]; then echo "no"; else echo "yes"; fi)/" "$SETTINGS"
                 settings_func
             ;;
 
@@ -87,10 +91,10 @@ process_data() {
     cat "$PROC_PATH/$1/net/dev"
 
     echo -e "\n\e[92mВвод-вывод (байт)\e[0m"
-    echo "Прочитано из ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "rchar" | sed 's/rchar: //')"
-    echo "Записано в ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "wchar" | sed 's/wchar: //')"
-    echo "Количество сисколов (чтение): $(cat "$PROC_PATH/$1/io" | grep "syscr" | sed 's/syscr: //')"
-    echo "Количество сисколов (запись): $(cat "$PROC_PATH/$1/io" | grep "syscw" | sed 's/syscw: //')"
+    echo "Прочитано из ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "rchar" | sed 's/rchar://')"
+    echo "Записано в ФС процессом: $(cat "$PROC_PATH/$1/io" | grep "wchar" | sed 's/wchar://')"
+    echo "Количество сисколов (чтение): $(cat "$PROC_PATH/$1/io" | grep "syscr" | sed 's/syscr://')"
+    echo "Количество сисколов (запись): $(cat "$PROC_PATH/$1/io" | grep "syscw" | sed 's/syscw://')"
 
     local p_name=$(grep "Name" "$PROC_PATH/$1/status" | awk '{print $2}')
     # здесь доп информация journalctl, в /var/log/ особо ничего не нашел
@@ -107,9 +111,9 @@ process_data() {
 # например, через рекурсию сделать
 ps_analyser() {
 
-    option_1=$(grep "exclude_ps_process=" "$settings" | awk -F '=' '{print $2}')
-    option_2=$(grep "update_time=" "$settings" | awk -F '=' '{print $2}')
-    option_3=$(grep "is_logged=" "$settings" | awk -F '=' '{print $2}')
+    option_1=$(grep "exclude_ps_process=" "$SETTINGS" | awk -F '=' '{print $2}')
+    option_2=$(grep "update_time=" "$SETTINGS" | awk -F '=' '{print $2}')
+    option_3=$(grep "is_logged=" "$SETTINGS" | awk -F '=' '{print $2}')
 
     while true; do
 
@@ -125,6 +129,7 @@ ps_analyser() {
             sed -i '/ps/d' $PROCESSES_LOG
         fi
 
+        # сортировка в файле, 2 столбец
         sort -k2,2n "$PROCESSES_LOG" > process_file && mv process_file "$PROCESSES_LOG"
 
         read proccess_id cpu process_name <<< $(tail -n 1 $PROCESSES_LOG)
